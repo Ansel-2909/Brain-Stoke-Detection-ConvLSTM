@@ -1,0 +1,588 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.naive_bayes import GaussianNB
+from sklearn.naive_bayes import BernoulliNB
+from sklearn.svm import SVC
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from xgboost import XGBClassifier
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+
+import warnings
+warnings.filterwarnings('ignore')
+
+
+data = pd.read_csv("C:\Stroke Detection\healthcare-dataset-stroke-data.csv")
+
+print(f"Shape Of The Dataset : {data.shape}")
+print(f"\nGlimpse Of The Dataset :")
+data.head().style.set_properties(**{"background-color": "#c69c6c","color":"#432C0A","border": "1.5px #432C0A"})
+
+print(f"Informations Of The Dataset :\n")
+print(data.info())
+
+print(f"Summary Of The Dataset :")
+data.describe().style.set_properties(**{"background-color": "#c69c6c","color":"#432C0A","border": "1.5px #432C0A"})
+
+data.describe(include=object).T.style.set_properties(**{"background-color": "#c69c6c","color":"#432C0A","border": "1.5px #432C0A"})
+
+dup = data[data.duplicated()].shape[0]
+print(f"There is {dup} duplicate entry among {data.shape[0]} entries in this dataset.")
+
+data.drop_duplicates(keep='first',inplace=True)
+print(f"After removing duplicate entries there are {data.shape[0]} entries in this dataset.")
+
+print(f"Null values of the Dataset :")
+data.isna().sum().to_frame().T.style.set_properties(**{"background-color": "#c69c6c","color":"#432C0A","border": "1.5px #432C0A"})
+
+data.dropna(axis = 0, inplace = True)
+print(f"After dropping null values, the shape of the Dataset is {data.shape}")
+print(f"After dropping null values, null values of the Dataset :")
+data.isna().sum().to_frame().T.style.set_properties(**{"background-color": "#c69c6c","color":"#432C0A","border": "1.5px #432C0A"})
+
+data["age"] = data["age"].astype("int")
+data = data[data["gender"] != "Other"]
+data["hypertension"].replace({0:"No", 1:"Yes"}, inplace = True)
+data["heart_disease"].replace({0:"No", 1:"Yes"}, inplace = True)
+data["stroke"].replace({0:"No", 1:"Yes"}, inplace = True)
+data["ever_married"].replace({"No":"Unmarried", "Yes":"Married"}, inplace = True)
+data["work_type"].replace({"Self-employed":"Self Employed","children":"Children", "Govt_job":"Government Job", "Private":"Private Job", "Never_worked":"Unemployed"}, inplace = True)
+data["smoking_status"].replace({"never smoked":"Never Smoked","formerly smoked":"Formerly Smoked", "smokes":"Smokes"}, inplace = True)
+data.rename(columns={"gender": "Gender","age": "Age","hypertension":"Hypertension","heart_disease":"Heart Disease","ever_married":"Marital Status","work_type":"Occupation Type","Residence_type":"Residence Type","avg_glucose_level": "Average Glucose Level","bmi":"BMI","smoking_status":"Smoking Status","stroke":"Stroke"}, inplace = True)
+data = data[["Age","Gender","Marital Status","BMI","Occupation Type","Residence Type","Smoking Status","Hypertension","Heart Disease","Average Glucose Level","Stroke"]]
+
+print("After preprocessing, let's have a glimpse of the final dataset :")
+data.head().style.set_properties(**{"background-color": "#c69c6c","color":"#432C0A","border": "1.5px #432C0A"})
+
+print(f"After preprocessing, let's have a look on the summary of the dataset :")
+data.describe().T.style.set_properties(**{"background-color": "#c69c6c","color":"#432C0A","border": "1.5px #432C0A"})
+
+data.describe(include=object).T.style.set_properties(**{"background-color": "#c69c6c","color":"#432C0A","border": "1.5px #432C0A"})
+
+sns.set_style("white")
+sns.set(rc={"axes.facecolor":"#E8CE9D","figure.facecolor":"#E8CE9D","grid.color":"white"})
+sns.set_context("poster",font_scale = .7)
+
+# palette = ["#432C0A","#f7941d","#6c9a76","#f25a29","#cc4b57"]
+palette = ["#764a23","#f7941d","#6c9a76","#f25a29","#cc4b57"]
+palette_cmap = ["#6c9a76","#cc4b57","#764a23","#f25a29","#f7941d"]
+
+# sns.palplot(sns.color_palette(palette))
+# sns.palplot(sns.color_palette(palette_cmap))
+# plt.show()
+
+print(f"Let's have a look on the distribution of stroke patient's age :")
+plt.subplots(figsize=(20, 8))
+p = sns.histplot(data=data[data["Stroke"] == "Yes"],x="Age",hue="Gender",multiple="stack",palette=palette[0:2],kde=True,bins=30,alpha=1,fill=True,edgecolor="black",linewidth=3)
+p.axes.lines[0].set_color(palette[1])
+p.axes.lines[1].set_color(palette[0])
+p.axes.set_title("\nStroke Patient's Age Distribution\n",fontsize=30)
+p.set_ylabel("Count",fontsize=25)
+p.set_xlabel("\nAge",fontsize=25)
+p.set_yscale("linear")
+sns.despine(left=True, bottom=True)
+
+plt.show()
+
+print("Let's have a look on the distribution of genderwise stroke patient's age :")
+plt.subplots(figsize=(20, 8))
+
+p=sns.violinplot(data=data[data["Stroke"] == "Yes"],x=data["Gender"],y=data["Age"],order=data["Gender"].value_counts(ascending=True).index,palette=palette[0:2],saturation=1,linewidth=4,edgecolor="black")
+p.axes.set_title("\nStroke Patient's Age On Gender\n",fontsize=30)
+p.axes.set_xlabel("\nGender",fontsize=25)
+p.axes.set_ylabel("Age",fontsize=25)
+
+sns.despine(left=True, bottom=True)
+plt.show()
+
+print(f"Let's have a look on the ratio of stroke patient's gender :")
+plt.subplots(figsize=(12, 12))
+
+labels = "Male","Female"
+size = 0.5
+
+wedges, texts, autotexts = plt.pie([data[data["Stroke"] == "Yes"]["Gender"].value_counts(ascending=True).values[0],
+                                    data[data["Stroke"] == "Yes"]["Gender"].value_counts(ascending=True).values[1]],
+                                    explode = (0,0),
+                                    textprops=dict(size= 20, color= "white"),
+                                    autopct="%.2f%%", 
+                                    pctdistance = 0.72,
+                                    radius=.9, 
+                                    colors = palette[0:2], 
+                                    shadow = True,
+                                    wedgeprops=dict(width = size, edgecolor = "black", 
+                                    linewidth = 4),
+                                    startangle = 100)
+
+plt.legend(wedges, labels, title="Gender",loc="center left",bbox_to_anchor=(1, 0, 0.5, 1), edgecolor = "black")
+plt.title("\nStroke Patient's Gender",fontsize=25)
+plt.show()
+
+print("Let's have a look on the stroke patient's gender :")
+plt.subplots(figsize=(20, 5))
+p=sns.countplot(y=data[data["Stroke"]=="Yes"]["Gender"],order=data[data["Stroke"]=="Yes"]["Gender"].value_counts(ascending=True).index,palette=palette[0:2], saturation=1, edgecolor = "#1c1c1c", linewidth = 5)
+# p.axes.set_yscale("symlog")
+p.axes.set_title("\nStroke Patient's Gender\n",fontsize=25)
+p.axes.set_ylabel("Gender",fontsize=20)
+p.axes.set_xlabel("\nTotal",fontsize=20)
+p.axes.set_yticklabels(p.get_yticklabels(),rotation = 0)
+for container in p.containers:
+    p.bar_label(container,label_type="center",padding=6,size=30,color="black",rotation=0,
+    bbox={"boxstyle": "round", "pad": 0.2, "facecolor": "#e0b583", "edgecolor": "#1c1c1c", "linewidth" : 4, "alpha": 1})
+
+
+sns.despine(left=True, bottom=True)
+plt.show()
+
+print(f"Let's have a look on the ratio of stroke patient's smoking status :")
+plt.subplots(figsize=(12, 12))
+
+labels = "Never Smoked","Formerly Smoked","Smokes","Unknown"
+size = 0.5
+
+wedges, texts, autotexts = plt.pie([data[data["Stroke"] == "Yes"]["Smoking Status"].value_counts(ascending=False).values[0],
+                                    data[data["Stroke"] == "Yes"]["Smoking Status"].value_counts(ascending=False).values[1],
+                                    data[data["Stroke"] == "Yes"]["Smoking Status"].value_counts(ascending=False).values[2],
+                                    data[data["Stroke"] == "Yes"]["Smoking Status"].value_counts(ascending=False).values[3]],
+                                    explode = (0,0,0,0),
+                                    textprops=dict(size= 20, color= "white"),
+                                    autopct="%.2f%%", 
+                                    pctdistance = 0.72,
+                                    radius=.9, 
+                                    colors = palette[0:4], 
+                                    shadow = True,
+                                    wedgeprops=dict(width = size, edgecolor = "black", 
+                                    linewidth = 4),
+                                    startangle = 20)
+
+plt.legend(wedges, labels, title="Smoking Status",loc="center left",bbox_to_anchor=(1, 0, 0.5, 1), edgecolor = "black")
+plt.title("\nStroke Patient's Smoking Status",fontsize=25)
+plt.show()
+
+
+print("Let's have a look on the stroke patient's smoking status :")
+plt.subplots(figsize=(20, 8))
+p=sns.countplot(y=data[data["Stroke"]=="Yes"]["Smoking Status"],order=data[data["Stroke"]=="Yes"]["Smoking Status"].value_counts(ascending=False).index,palette=palette[0:4], saturation=1, edgecolor = "#1c1c1c", linewidth = 5)
+# p.axes.set_yscale("symlog")
+p.axes.set_title("\nStroke Patient's Smoking Status\n",fontsize=25)
+p.axes.set_ylabel("Status",fontsize=20)
+p.axes.set_xlabel("\nTotal",fontsize=20)
+p.axes.set_yticklabels(p.get_yticklabels(),rotation = 0)
+for container in p.containers:
+    p.bar_label(container,label_type="center",padding=6,size=30,color="black",rotation=0,
+    bbox={"boxstyle": "round", "pad": 0.2, "facecolor": "#e0b583", "edgecolor": "#1c1c1c", "linewidth" : 4, "alpha": 1})
+
+
+sns.despine(left=True, bottom=True)
+plt.show()
+
+print(f"Let's have a look on the ratio of stroke patient's marital status :")
+plt.subplots(figsize=(12, 12))
+
+labels = "Married","Unmarried"
+size = 0.5
+
+wedges, texts, autotexts = plt.pie([data[data["Stroke"] == "Yes"]["Marital Status"].value_counts(ascending=False).values[0],
+                                    data[data["Stroke"] == "Yes"]["Marital Status"].value_counts(ascending=False).values[1]],
+                                    explode = (0,0),
+                                    textprops=dict(size= 20, color= "white"),
+                                    autopct="%.2f%%", 
+                                    pctdistance = 0.72,
+                                    radius=.9, 
+                                    colors = palette[0:2], 
+                                    shadow = True,
+                                    wedgeprops=dict(width = size, edgecolor = "black", 
+                                    linewidth = 4),
+                                    startangle = 20)
+
+plt.legend(wedges, labels, title="Marital Status",loc="center left",bbox_to_anchor=(1, 0, 0.5, 1), edgecolor = "black")
+plt.title("\nStroke Patient's Marital Status",fontsize=25)
+plt.show()
+
+print("Let's have a look on the stroke patient's marital status :")
+plt.subplots(figsize=(20, 5))
+p=sns.countplot(y=data[data["Stroke"]=="Yes"]["Marital Status"],order=data[data["Stroke"]=="Yes"]["Marital Status"].value_counts(ascending=False).index,palette=palette[0:2], saturation=1, edgecolor = "#1c1c1c", linewidth = 5)
+# p.axes.set_yscale("symlog")
+p.axes.set_title("\nStroke Patient's Marital Status\n",fontsize=25)
+p.axes.set_ylabel("Status",fontsize=20)
+p.axes.set_xlabel("\nTotal",fontsize=20)
+p.axes.set_yticklabels(p.get_yticklabels(),rotation = 0)
+for container in p.containers:
+    p.bar_label(container,label_type="center",padding=6,size=30,color="black",rotation=0,
+    bbox={"boxstyle": "round", "pad": 0.2, "facecolor": "#e0b583", "edgecolor": "#1c1c1c", "linewidth" : 4, "alpha": 1})
+
+
+sns.despine(left=True, bottom=True)
+plt.show()
+
+print(f"Let's have a look on the distribution of stroke patient's BMI :")
+plt.subplots(figsize=(20, 8))
+p = sns.histplot(data=data[data["Stroke"] == "Yes"],x="BMI",hue="Gender",multiple="stack",palette=palette[0:2],kde=True,bins=30,alpha=1,fill=True,edgecolor="black",linewidth=3)
+p.axes.lines[0].set_color(palette[1])
+p.axes.lines[1].set_color(palette[0])
+p.axes.set_title("\nStroke Patient's BMI Distribution\n",fontsize=30)
+p.set_ylabel("Count",fontsize=25)
+p.set_xlabel("\nBMI",fontsize=25)
+p.set_yscale("linear")
+sns.despine(left=True, bottom=True)
+
+plt.show()
+
+print("Let's have a look on the distribution of genderwise stroke patient's BMI :")
+plt.subplots(figsize=(20, 8))
+
+p=sns.violinplot(data=data[data["Stroke"] == "Yes"],x=data["Gender"],y=data["BMI"],order=data["Gender"].value_counts(ascending=True).index,palette=palette[0:2],saturation=1,linewidth=4,edgecolor="black")
+p.axes.set_title("\nStroke Patient's BMI On Gender\n",fontsize=30)
+p.axes.set_xlabel("\nGender",fontsize=25)
+p.axes.set_ylabel("BMI",fontsize=25)
+
+sns.despine(left=True, bottom=True)
+plt.show()
+
+print(f"Let's have a look on the ratio of stroke patient's heart disease :")
+plt.subplots(figsize=(12, 12))
+
+labels = "No","Yes"
+size = 0.5
+
+wedges, texts, autotexts = plt.pie([data[data["Stroke"] == "Yes"]["Heart Disease"].value_counts(ascending=False).values[0],
+                                    data[data["Stroke"] == "Yes"]["Heart Disease"].value_counts(ascending=False).values[1]],
+                                    explode = (0,0),
+                                    textprops=dict(size= 20, color= "white"),
+                                    autopct="%.2f%%", 
+                                    pctdistance = 0.72,
+                                    radius=.9, 
+                                    colors = palette[0:2], 
+                                    shadow = True,
+                                    wedgeprops=dict(width = size, edgecolor = "black", 
+                                    linewidth = 4),
+                                    startangle = 35)
+
+plt.legend(wedges, labels, title="Heart Disease",loc="center left",bbox_to_anchor=(1, 0, 0.5, 1), edgecolor = "black")
+plt.title("\nStroke Patient's Heart Disease",fontsize=25)
+plt.show()
+
+print("Let's have a look on the stroke patient's heart disease :")
+plt.subplots(figsize=(20, 5))
+p=sns.countplot(y=data[data["Stroke"]=="Yes"]["Heart Disease"],order=data[data["Stroke"]=="Yes"]["Heart Disease"].value_counts(ascending=False).index,palette=palette[0:2], saturation=1, edgecolor = "#1c1c1c", linewidth = 5)
+# p.axes.set_yscale("symlog")
+p.axes.set_title("\nStroke Patient's Heart Disease\n",fontsize=25)
+p.axes.set_ylabel("Status",fontsize=20)
+p.axes.set_xlabel("\nTotal",fontsize=20)
+p.axes.set_yticklabels(p.get_yticklabels(),rotation = 0)
+for container in p.containers:
+    p.bar_label(container,label_type="center",padding=6,size=30,color="black",rotation=0,
+    bbox={"boxstyle": "round", "pad": 0.2, "facecolor": "#e0b583", "edgecolor": "#1c1c1c", "linewidth" : 4, "alpha": 1})
+
+
+sns.despine(left=True, bottom=True)
+plt.show()
+
+print(f"Let's have a look on the ratio of stroke patient's heart disease :")
+plt.subplots(figsize=(12, 12))
+
+labels = "No","Yes"
+size = 0.5
+
+wedges, texts, autotexts = plt.pie([data[data["Stroke"] == "Yes"]["Hypertension"].value_counts(ascending=False).values[0],
+                                    data[data["Stroke"] == "Yes"]["Hypertension"].value_counts(ascending=False).values[1]],
+                                    explode = (0,0),
+                                    textprops=dict(size= 20, color= "white"),
+                                    autopct="%.2f%%", 
+                                    pctdistance = 0.72,
+                                    radius=.9, 
+                                    colors = palette[0:2], 
+                                    shadow = True,
+                                    wedgeprops=dict(width = size, edgecolor = "black", 
+                                    linewidth = 4),
+                                    startangle = 55)
+
+plt.legend(wedges, labels, title="Hypertension",loc="center left",bbox_to_anchor=(1, 0, 0.5, 1), edgecolor = "black")
+plt.title("\nStroke Patient's Hypertension Status",fontsize=25)
+plt.show()
+
+print("Let's have a look on the stroke patient's hypertension status :")
+plt.subplots(figsize=(20, 5))
+p=sns.countplot(y=data[data["Stroke"]=="Yes"]["Hypertension"],order=data[data["Stroke"]=="Yes"]["Hypertension"].value_counts(ascending=False).index,palette=palette[0:2], saturation=1, edgecolor = "#1c1c1c", linewidth = 5)
+# p.axes.set_yscale("symlog")
+p.axes.set_title("\nStroke Patient's Hypertension Status\n",fontsize=25)
+p.axes.set_ylabel("Status",fontsize=20)
+p.axes.set_xlabel("\nTotal",fontsize=20)
+p.axes.set_yticklabels(p.get_yticklabels(),rotation = 0)
+for container in p.containers:
+    p.bar_label(container,label_type="center",padding=6,size=30,color="black",rotation=0,
+    bbox={"boxstyle": "round", "pad": 0.2, "facecolor": "#e0b583", "edgecolor": "#1c1c1c", "linewidth" : 4, "alpha": 1})
+
+
+sns.despine(left=True, bottom=True)
+plt.show()
+
+print(f"Let's have a look on the distribution of stroke patient's average glucose level :")
+plt.subplots(figsize=(20, 8))
+p = sns.histplot(data=data[data["Stroke"]=="Yes"],x="Average Glucose Level",hue="Gender",multiple="stack",palette=palette[0:2],kde=True,bins=30,alpha=1,fill=True,edgecolor="black",linewidth=3)
+p.axes.lines[0].set_color(palette[1])
+p.axes.lines[1].set_color(palette[0])
+p.axes.set_title("\nStroke Patient's Average Glucose Level Distribution\n",fontsize=30)
+p.set_ylabel("Count",fontsize=25)
+p.set_xlabel("\nAverage Glucose Level",fontsize=25)
+p.set_yscale("linear")
+sns.despine(left=True, bottom=True)
+
+plt.show()
+
+print("Let's have a look on the distribution of genderwise stroke patient's Average Glucose Level :")
+plt.subplots(figsize=(20, 8))
+
+p=sns.violinplot(data=data[data["Stroke"]=="Yes"],x=data["Gender"],y=data["Average Glucose Level"],order=data["Gender"].value_counts(ascending=True).index,palette=palette[0:2],saturation=1,linewidth=4,edgecolor="black")
+p.axes.set_title("\nStroke Patient's Average Glucose Level On Gender\n",fontsize=30)
+p.axes.set_xlabel("\nGender",fontsize=25)
+p.axes.set_ylabel("Average Glucose Level",fontsize=25)
+
+sns.despine(left=True, bottom=True)
+plt.show()
+
+print(f"Let's have a look on the ratio of stroke patient's occupation type :")
+plt.subplots(figsize=(12, 12))
+
+labels = "Private Job","Self Employed","Government Job"
+size = 0.5
+
+wedges, texts, autotexts = plt.pie([data[data["Stroke"] == "Yes"]["Occupation Type"].value_counts(ascending=False).values[0],
+                                    data[data["Stroke"] == "Yes"]["Occupation Type"].value_counts(ascending=False).values[1],
+                                    data[data["Stroke"] == "Yes"]["Occupation Type"].value_counts(ascending=False).values[2]],
+                                    explode = (0,0,0),
+                                    textprops=dict(size= 20, color= "white"),
+                                    autopct="%.2f%%", 
+                                    pctdistance = 0.72,
+                                    radius=.9, 
+                                    colors = palette[0:3], 
+                                    shadow = True,
+                                    wedgeprops=dict(width = size, edgecolor = "black", 
+                                    linewidth = 4),
+                                    startangle = -20)
+
+plt.legend(wedges, labels, title="Occupation Type",loc="center left",bbox_to_anchor=(1, 0, 0.5, 1), edgecolor = "black")
+plt.title("\nStroke Patient's Occupation Type",fontsize=25)
+plt.show()
+
+print("Let's have a look on the stroke patient's occupation type :")
+plt.subplots(figsize=(20, 8))
+p=sns.countplot(y=data[data["Stroke"]=="Yes"]["Occupation Type"],order=data[data["Stroke"]=="Yes"]["Occupation Type"].value_counts(ascending=False).index,palette=palette[0:4], saturation=1, edgecolor = "#1c1c1c", linewidth = 5)
+# p.axes.set_yscale("symlog")
+p.axes.set_title("\nStroke Patient's Occupation Type\n",fontsize=25)
+p.axes.set_ylabel("Type",fontsize=20)
+p.axes.set_xlabel("\nTotal",fontsize=20)
+p.axes.set_yticklabels(p.get_yticklabels(),rotation = 0)
+for container in p.containers:
+    p.bar_label(container,label_type="center",padding=6,size=30,color="black",rotation=0,
+    bbox={"boxstyle": "round", "pad": 0.2, "facecolor": "#e0b583", "edgecolor": "#1c1c1c", "linewidth" : 4, "alpha": 1})
+
+
+sns.despine(left=True, bottom=True)
+plt.show()
+
+print(f"Let's have a look on the ratio of stroke patient's residence type :")
+plt.subplots(figsize=(12, 12))
+
+labels = "Urban","Rural"
+size = 0.5
+
+wedges, texts, autotexts = plt.pie([data[data["Stroke"] == "Yes"]["Residence Type"].value_counts(ascending=False).values[0],
+                                    data[data["Stroke"] == "Yes"]["Residence Type"].value_counts(ascending=False).values[1]],
+                                    explode = (0,0),
+                                    textprops=dict(size= 20, color= "white"),
+                                    autopct="%.2f%%", 
+                                    pctdistance = 0.72,
+                                    radius=.9, 
+                                    colors = palette[0:2], 
+                                    shadow = True,
+                                    wedgeprops=dict(width = size, edgecolor = "black", 
+                                    linewidth = 4),
+                                    startangle = 85)
+
+plt.legend(wedges, labels, title="Residence Type",loc="center left",bbox_to_anchor=(1, 0, 0.5, 1), edgecolor = "black")
+plt.title("\nStroke Patient's Residence Type",fontsize=25)
+plt.show()
+
+print("Let's have a look on the stroke patient's residence type :")
+plt.subplots(figsize=(20, 5))
+p=sns.countplot(y=data[data["Stroke"]=="Yes"]["Residence Type"],order=data[data["Stroke"]=="Yes"]["Residence Type"].value_counts(ascending=False).index,palette=palette[0:2], saturation=1, edgecolor = "#1c1c1c", linewidth = 5)
+# p.axes.set_yscale("symlog")
+p.axes.set_title("\nStroke Patient's Residence Type\n",fontsize=25)
+p.axes.set_ylabel("Residence Type",fontsize=20)
+p.axes.set_xlabel("\nTotal",fontsize=20)
+p.axes.set_yticklabels(p.get_yticklabels(),rotation = 0)
+for container in p.containers:
+    p.bar_label(container,label_type="center",padding=6,size=30,color="black",rotation=0,
+    bbox={"boxstyle": "round", "pad": 0.2, "facecolor": "#e0b583", "edgecolor": "#1c1c1c", "linewidth" : 4, "alpha": 1})
+
+
+sns.despine(left=True, bottom=True)
+plt.show()
+
+catcol = [col for col in data.columns if data[col].dtype == "object"]
+le = LabelEncoder()
+for col in catcol:
+        data[col] = le.fit_transform(data[col])
+
+
+plt.subplots(figsize =(10, 10))
+
+sns.heatmap(data.corr(), cmap = palette_cmap, square=True, cbar_kws=dict(shrink =.82), 
+            annot=True, vmin=-1, vmax=1, linewidths=3,linecolor='#e0b583',annot_kws=dict(fontsize =12))
+plt.title("Pearson Correlation Of Features\n", fontsize=25)
+plt.xticks(rotation=90)
+plt.yticks(rotation=0)
+plt.show()
+
+x = data.drop(["Stroke"],axis =1)
+y = data["Stroke"]
+
+sc = StandardScaler()
+x = sc.fit_transform(x)
+x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=42)
+
+print(f"Shape of training data : {x_train.shape}, {y_train.shape}")
+print(f"Shape of testing data : {x_test.shape}, {y_test.shape}")
+
+lr = LogisticRegression()
+lr.fit(x_train, y_train)
+lr_pred = lr.predict(x_test)
+lr_conf = confusion_matrix(y_test, lr_pred)
+lr_report = classification_report(y_test, lr_pred)
+lr_acc = round(accuracy_score(y_test, lr_pred)*100, ndigits = 2)
+print(f"Confusion Matrix : \n\n{lr_conf}")
+print(f"\nClassification Report : \n\n{lr_report}")
+print(f"\nThe Accuracy of Logistic Regression is {lr_acc} %")
+
+gnb = GaussianNB()
+gnb.fit(x_train, y_train)
+gnb_pred = gnb.predict(x_test)
+gnb_conf = confusion_matrix(y_test, gnb_pred)
+gnb_report = classification_report(y_test, gnb_pred)
+gnb_acc = round(accuracy_score(y_test, gnb_pred)*100, ndigits = 2)
+print(f"Confusion Matrix : \n\n{gnb_conf}")
+print(f"\nClassification Report : \n\n{gnb_report}")
+print(f"\nThe Accuracy of Gaussian Naive Bayes is {gnb_acc} %")
+
+bnb = BernoulliNB()
+bnb.fit(x_train, y_train)
+bnb_pred = bnb.predict(x_test)
+bnb_conf = confusion_matrix(y_test, bnb_pred)
+bnb_report = classification_report(y_test, bnb_pred)
+bnb_acc = round(accuracy_score(y_test, bnb_pred)*100, ndigits = 2)
+print(f"Confusion Matrix : \n\n{bnb_conf}")
+print(f"\nClassification Report : \n\n{bnb_report}")
+print(f"\nThe Accuracy of Bernoulli Naive Bayes is {bnb_acc} %")
+
+svm = SVC(C = 100, gamma = 0.002)
+svm.fit(x_train, y_train)
+svm_pred = svm.predict(x_test)
+svm_conf = confusion_matrix(y_test, svm_pred)
+svm_report = classification_report(y_test, svm_pred)
+svm_acc = round(accuracy_score(y_test, svm_pred)*100, ndigits = 2)
+print(f"Confusion Matrix : \n\n{svm_conf}")
+print(f"\nClassification Report : \n\n{svm_report}")
+print(f"\nThe Accuracy of Support Vector Machine is {svm_acc} %")
+
+rfg = RandomForestClassifier(n_estimators = 100, random_state = 42) 
+rfg.fit(x_train, y_train)
+rfg_pred = rfg.predict(x_test)
+rfg_conf = confusion_matrix(y_test, rfg_pred)
+rfg_report = classification_report(y_test, rfg_pred)
+rfg_acc = round(accuracy_score(y_test, rfg_pred)*100, ndigits = 2)
+print(f"Confusion Matrix : \n\n{rfg_conf}")
+print(f"\nClassification Report : \n\n{rfg_report}")
+print(f"\nThe Accuracy of Random Forest Classifier is {rfg_acc} %")
+
+knn = KNeighborsClassifier(n_neighbors=2)
+knn.fit(x_train, y_train)
+knn_pred = knn.predict(x_test)
+knn_conf = confusion_matrix(y_test, knn_pred)
+knn_report = classification_report(y_test, knn_pred)
+knn_acc = round(accuracy_score(y_test, knn_pred)*100, ndigits = 2)
+print(f"Confusion Matrix : \n\n{knn_conf}")
+print(f"\nClassification Report : \n\n{knn_report}")
+print(f"\nThe Accuracy of K Nearest Neighbors Classifier is {knn_acc} %")
+
+xgb = XGBClassifier(use_label_encoder = False)
+xgb.fit(x_train, y_train)
+xgb_pred = xgb.predict(x_test)
+xgb_conf = confusion_matrix(y_test, xgb_pred)
+xgb_report = classification_report(y_test, xgb_pred)
+xgb_acc = round(accuracy_score(y_test, xgb_pred)*100, ndigits = 2)
+print(f"Confusion Matrix : \n\n{xgb_conf}")
+print(f"\nClassification Report : \n\n{xgb_report}")
+print(f"\nThe Accuracy of Extreme Gradient Boosting Classifier is {xgb_acc} %")
+
+import tensorflow as tf
+from tensorflow.keras import Sequential
+from tensorflow.keras import regularizers
+from tensorflow.keras.optimizers import Adam
+
+regularization_parameter = 0.003
+
+neural_model = Sequential([tf.keras.layers.Dense(units=32, input_dim=(x_train.shape[-1]), activation="relu", kernel_regularizer = regularizers.l1(regularization_parameter)),
+                    tf.keras.layers.Dense(units=64, activation="relu", kernel_regularizer = regularizers.l1(regularization_parameter)),
+                    tf.keras.layers.Dense(units=128, activation="relu", kernel_regularizer = regularizers.l1(regularization_parameter)),
+                    tf.keras.layers.Dropout(0.3),
+                    tf.keras.layers.Dense(units=16,activation="relu", kernel_regularizer = regularizers.l1(regularization_parameter)),
+                    tf.keras.layers.Dense(units=1, activation="sigmoid")
+                    ])
+
+print(neural_model.summary())
+
+class myCallback(tf.keras.callbacks.Callback):
+    def on_epoch_end(self, epoch, logs={}):
+        if(logs.get("accuracy") == 1.0):
+            print("\nAccuracy is 100% so canceling training!")
+            self.model.stop_training = True
+
+callbacks = myCallback()
+
+
+neural_model.compile(optimizer = Adam(learning_rate = 0.001), 
+                     loss = "binary_crossentropy", 
+                     metrics = ["accuracy"])
+
+history = neural_model.fit(x_train, y_train,
+                           epochs = 150,
+                           verbose = 1,
+                           batch_size = 64,
+                           validation_data = (x_test, y_test),
+                           callbacks = [callbacks])
+
+acc = history.history["accuracy"]
+val_acc = history.history["val_accuracy"]
+loss = history.history["loss"]
+val_loss = history.history["val_loss"]
+
+epochs = range(len(acc)) # number of epochs
+
+plt.figure(figsize=(20, 12))
+plt.subplot(2,1,1)
+plt.tight_layout(pad=8.0)
+
+plt.plot(epochs, acc, palette[0], label= "Training Accuracy")
+plt.plot(epochs, val_acc, palette[1], label= "Validation Accuracy")
+plt.yscale("linear")
+plt.title("\nTraining and validation accuracy",fontsize=25)
+plt.xlabel("\nEpoch",fontsize=20)
+plt.ylabel("Accuracy",fontsize=20)
+plt.legend(edgecolor="black")
+
+plt.subplot(2,1,2)
+plt.plot(epochs, loss, palette[0], label= "Training Loss")
+plt.plot(epochs, val_loss, palette[1], label= "Validation Loss")
+plt.title("Training and validation loss\n",fontsize=25)
+plt.xlabel("\nEpoch",fontsize=20)
+plt.ylabel("Loss",fontsize=20)
+plt.legend(edgecolor="black")
+
+sns.despine(left=True, bottom=True)
+plt.show()
